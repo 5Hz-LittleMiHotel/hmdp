@@ -18,6 +18,7 @@ public class MvcConfig implements WebMvcConfigurer {
         // 利用registry,拦截器的注册器,中的addinterceptor来添加一个拦截器
         registry.addInterceptor(new LoginInterceptor(/*stringRedisTemplate*/))
                 .excludePathPatterns( // 排除不需要拦截的路径,比如登录登出注册发送短信验证码
+                        "/voucher/**",
                         "/shop-type/**",
                         "/shop/**",
                         "/upload/**",
