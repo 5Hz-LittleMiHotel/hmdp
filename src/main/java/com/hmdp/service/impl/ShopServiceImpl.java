@@ -56,7 +56,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 使用封装工具类解决缓存击穿(逻辑过期)
         Shop shop = cacheClient
                 .queryWithLogicalExpire(
-                        CACHE_SHOP_KEY, id, Shop.class, id2 -> getById(id2), 20L, TimeUnit.SECONDS);
+                        CACHE_SHOP_KEY, id, Shop.class, id2 -> getById(id2), CACHE_SHOP_TTL, TimeUnit.SECONDS);
 
 
         if (shop == null) {
