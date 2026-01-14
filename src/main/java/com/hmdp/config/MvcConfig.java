@@ -15,6 +15,8 @@ public class MvcConfig implements WebMvcConfigurer {
     private StringRedisTemplate stringRedisTemplate;
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // token刷新拦截器
+        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).order(0); // 拦截所有请求
         // 利用registry,拦截器的注册器,中的addinterceptor来添加一个拦截器
         registry.addInterceptor(new LoginInterceptor(/*stringRedisTemplate*/))
                 .excludePathPatterns( // 排除不需要拦截的路径,比如登录登出注册发送短信验证码
@@ -27,7 +29,5 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/user/code",
                         "/user/login"
                 ).order(1);
-        // token刷新拦截器
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).order(0); // 拦截所有请求
-    }
+            }
 }
