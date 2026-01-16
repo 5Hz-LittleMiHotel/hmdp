@@ -8,8 +8,10 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private ISeckillVoucherService seckillVoucherService;
     @Resource
     private RedisIdWorker redisIdWorker;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
     @Override
     public Result seckillVoucher(Long voucherId) {
         // 1.查询优惠券
@@ -58,18 +62,21 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         // 5.1. 一人一单(复制过来加锁用)
         Long userId = UserHolder.getUser().getId();
-        synchronized(userId.toString().intern()){
-            // 获取代理对象(事务):
-            // return createVoucherOrder(voucherId); // 自我调用导致事务失效:
-            // 对createVoucherOrder加了事务,没给外面函数加.而外面函数调用createVoucherOrder是通过this.调用的.
-            // 这种情况下,其实this拿到的是当前 voucherorderserviceImpl 对象,而不是代理对象.
-            // 而我们知道,事务生效是因为对 voucherorderserviceImpl 做了动态代理,拿到了代理对象,来去做事务.
-            // 因此this.调用的方法没有事务的作用(spring事务失效的几种可能性之一.).
-            // 解决方法是借用 AopContext.currentProxy 方法拿到当前对象 IVoucherOrderService 的代理对象.
-            // 使用代理对象proxy调用 createVoucherOrder 函数,就会被spring管理了.(因为proxy是由spring创建的,所以他的方法是带有事务的函数)
-            // 由于我们是在 VoucherOrderServiceImpl 实现类里做的函数,因此 IVoucherOrderService 接口里面没这个函数. 在接口里创建函数后这个事务就可以调用了.
+        // 创建锁对象
+        SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, stringRedisTemplate);
+        // 获取锁
+        boolean isLock = lock.tryLock(1200); // 确定一个锁超时时间.跟业务执行时间有关.这里设1200是因为后面调试方便
+        //加锁失败
+        if (!isLock) { // 正常逻辑总用嵌套不优雅容易出问题,所以使用反向判断
+            return Result.fail("不允许重复下单");
+        }
+        try {
+            //获取代理对象(事务)
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } finally {
+            //释放锁
+            lock.unlock();
         }
     }
 
